@@ -4,7 +4,7 @@ LINK=ld65
 objects = shooter.o
 
 %.o: %.asm
-	$(COMPILE) -o $@ $<
+	$(COMPILE) -t nes -o $@ $<
 
 shooter.nes: $(objects)
 	$(LINK) -t nes -o $@ $<

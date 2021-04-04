@@ -31,24 +31,25 @@
 
 .segment "ZEROPAGE"
 ; 0x00 - 0xFF
-    controller: .res 1
-    scrollx:    .res 1
-    scrolly:    .res 1
+    drawcomplete: .res 1   ; Indicates that vblank has finished PPU processing when it's value is 1
+    controller:   .res 1
+    scrollx:      .res 1
+    scrolly:      .res 1
 
     MAXENTITIES = 10
-    entities:   .res .sizeof(Entity) * MAXENTITIES
+    entities:     .res .sizeof(Entity) * MAXENTITIES
     TOTALENTITIES = .sizeof(Entity) * MAXENTITIES
     
-    buttonflag: .res 1
-    swap:       .res 1
-    hswaph:     .res 1
-    bgloadlo:   .res 1
-    bgloadhi:   .res 1
-    bglow:      .res 1
-    bghi:       .res 1
-    seed:       .res 2     ; initialize 16-bit seed to any value except 0
-    flicker:    .res 1
-    spritemem:  .res 2
+    buttonflag:   .res 1
+    swap:         .res 1
+    hswaph:       .res 1
+    bgloadlo:     .res 1
+    bgloadhi:     .res 1
+    bglow:        .res 1
+    bghi:         .res 1
+    seed:         .res 2     ; initialize 16-bit seed to any value except 0
+    flicker:      .res 1
+    spritemem:    .res 2
 
 
 .segment "CODE"
@@ -70,7 +71,7 @@ prng:  ; Random Number Generator
 
 
 WAITFORVBLANK:
-    bit $202
+    bit $2002
     bpl WAITFORVBLANK
     rts
 
@@ -207,175 +208,13 @@ ATTLOAD:
     sta $2000
     lda #%00011110
     sta $2001
-
-FOREVER:
-    jmp FOREVER
-
-VBLANK:
-; todo: rework this so game engine code is in main execution and
-; only handle graphics updates here in VBLANK
-    lda #$02
-    sta $07FF
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-; begin populating the OAM data in memory
-    ldx #$00
-    lda #$00
-    ldy #$00
+    
+    lda #$80
     sta spritemem
     lda #$02
     sta spritemem+1
-   
-DRAWENTITIES:
-    lda entities+Entity::type, x
-    cmp #EntityType::PlayerType
-    beq PLAYERSPRITE
-    cmp #EntityType::Bullet
-    beq BULLET
-    jmp CHECKENDSPRITE
 
-BULLET:
-    lda entities+Entity::ypos, x ; y
-    sta (spritemem), y
-    iny
-    lda #$01  ; tile
-    sta (spritemem), y
-    iny
-    lda #$02 ; palette etx
-    sta (spritemem), y
-    iny
-    lda entities+Entity::xpos, x ; x
-    sta (spritemem), y
-    iny
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
- 
-    jmp CHECKENDSPRITE
-
-FLYBY:
-PLAYERSPRITE:
-    lda entities+Entity::ypos, x ; y
-    sta (spritemem), y
-    iny
-    lda #$00 ; tile
-    sta (spritemem), y
-    iny
-    lda #$01 ; palette etc
-    sta (spritemem), y
-    iny
-    lda entities+Entity::xpos, x ; x
-    sta (spritemem), y
-    iny
-
-    lda entities+Entity::ypos, x ; y
-    clc
-    adc #$08
-    sta (spritemem), y
-    iny
-    lda #$10 ; tile
-    sta (spritemem), y
-    iny
-    lda #$01 ; palette etc
-    sta (spritemem), y
-    iny
-    lda entities+Entity::xpos, x ; x
-    sta (spritemem), y
-    iny
-
-    lda entities+Entity::ypos, x ; y
-    sta (spritemem), y
-    iny
-    lda #$00 ; tile
-    sta (spritemem), y
-    iny
-    lda #$41 ; palette etc
-    sta (spritemem), y
-    iny
-    lda entities+Entity::xpos, x ; x
-    clc
-    adc #$08
-    sta (spritemem), y
-    iny
-
-    lda entities+Entity::ypos, x ; y
-    clc
-    adc #$08
-    sta (spritemem), y
-    iny
-    lda #$10 ; tile
-    sta (spritemem), y
-    iny
-    lda #$41 ; palette etc
-    sta (spritemem), y
-    iny
-    lda entities+Entity::xpos, x ; x
-    clc
-    adc #$08
-    sta (spritemem), y
-    iny
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-CHECKENDSPRITE:
-    txa
-    clc
-    adc #.sizeof(Entity)
-    txa
-    cpx #TOTALENTITIES
-    beq DONESPRITE
-    jmp DRAWENTITIES
-
-DONESPRITE:
-    inc flicker
-    lda flicker
-    and #$0C
-    bne noflicker
-
-    inc hswaph
-    lda hswaph
-    cmp #$23
-    bne skiproll
-    lda #$21
-    sta hswaph
-
-skiproll:
-
-; clear register and set
-; palette address
-    lda $2002
-    lda #$3F
-    sta $2006
-    lda #$17
-    sta $2006
-
-    lda hswaph
-    sta $2007
-
-noflicker:
-
-; DMA copy sprites
-    lda #$00
-    sta $2003 ; reset counter
-    lda #$02  ; set memory to $0200 range
-    sta $4014
-    nop       ; improve scan synchronization
-
-    lda #$00  ; clear out the register
-    sta $2006
-    sta $2006
-
-    lda scrollx
-    sta $2005
-    lda scrolly
-    sta $2005
-
-    lda #%10001000
-    ora swap
-    ldx $2002 ; clear the register before resetting because we're in the vblank
-    sta $2000
-
-donewithppu:
-    lda #$01
-    sta $07FF
-
+GAMELOOP:
 INITILIZESPRITES:
     ldy #$00
     lda #$FF
@@ -483,10 +322,6 @@ checkarerelease:
     jmp addbullet
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 addbullet:
-    nop
-    nop
-    nop
-    nop
     ldx #$00
 addbulletloop:
     cpx #TOTALENTITIES-.sizeof(Entity) ; stop here because we're interested in up to 1c, but we dont want to go past that
@@ -552,6 +387,196 @@ skipentity:
     bne processentitiesloop
 doneprocessentities:
 
+waitfordrawtocomplete:
+    lda drawcomplete
+    cmp #$01
+    bne waitfordrawtocomplete
+    lda #$00
+    sta drawcomplete
+
+    jmp GAMELOOP
+
+VBLANK: 
+; todo: rework this so game engine code is in main execution and
+; only handle graphics updates here in VBLANK
+    lda #$02
+    sta $07FF
+    pha ; Pushing - A, P, X, Y
+    php
+    txa
+    pha
+    tya
+    pha
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; begin populating the OAM data in memory
+    ldx #$00
+    lda #$00
+    ldy #$00
+    sta spritemem
+    lda #$02
+    sta spritemem+1
+   
+DRAWENTITIES:
+    lda entities+Entity::type, x
+    cmp #EntityType::PlayerType
+    beq PLAYERSPRITE
+    cmp #EntityType::Bullet
+    beq BULLET
+    jmp CHECKENDSPRITE
+
+BULLET:
+    lda entities+Entity::ypos, x ; y
+    sta (spritemem), y
+    iny
+    lda #$01  ; tile
+    sta (spritemem), y
+    iny
+    lda #$02 ; palette etx
+    sta (spritemem), y
+    iny
+    lda entities+Entity::xpos, x ; x
+    sta (spritemem), y
+    iny
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ 
+    jmp CHECKENDSPRITE
+
+FLYBY:
+PLAYERSPRITE:
+    ; top left sprite
+    lda entities+Entity::ypos, x ; y
+    sta (spritemem), y
+    iny
+    lda #$00 ; tile
+    sta (spritemem), y
+    iny
+    lda #$01 ; palette etc
+    sta (spritemem), y
+    iny
+    lda entities+Entity::xpos, x ; x
+    sta (spritemem), y
+    iny
+
+    ; bottom left sprite
+    lda entities+Entity::ypos, x ; y
+    clc
+    adc #$08
+    sta (spritemem), y
+    iny
+    lda #$10 ; tile
+    sta (spritemem), y
+    iny
+    lda #$01 ; palette etc
+    sta (spritemem), y
+    iny
+    lda entities+Entity::xpos, x ; x
+    sta (spritemem), y
+    iny
+
+    ; top right sprite
+    lda entities+Entity::ypos, x ; y
+    sta (spritemem), y
+    iny
+    lda #$00 ; tile
+    sta (spritemem), y
+    iny
+    lda #$41 ; palette etc
+    sta (spritemem), y
+    iny
+    lda entities+Entity::xpos, x ; x
+    clc
+    adc #$08
+    sta (spritemem), y
+    iny
+
+    ; bottom right sprite
+    lda entities+Entity::ypos, x ; y
+    clc
+    adc #$08
+    sta (spritemem), y
+    iny
+    lda #$10 ; tile
+    sta (spritemem), y
+    iny
+    lda #$41 ; palette etc
+    sta (spritemem), y
+    iny
+    lda entities+Entity::xpos, x ; x
+    clc
+    adc #$08
+    sta (spritemem), y
+    iny
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+CHECKENDSPRITE:
+    txa
+    clc
+    adc #.sizeof(Entity)
+    tax
+    cpx #TOTALENTITIES
+    beq DONESPRITE
+    jmp DRAWENTITIES
+
+DONESPRITE:
+    inc flicker
+    lda flicker
+    and #$0C
+    bne noflicker
+
+    inc hswaph
+    lda hswaph
+    cmp #$23
+    bne skiproll
+    lda #$21
+    sta hswaph
+
+skiproll:
+
+; clear register and set
+; palette address
+    lda $2002
+    lda #$3F
+    sta $2006
+    lda #$17
+    sta $2006
+
+    lda hswaph
+    sta $2007
+
+noflicker:
+
+; DMA copy sprites
+    lda #$00
+    sta $2003 ; reset counter
+    lda #$02  ; set memory to $0200 range
+    sta $4014
+    nop       ; improve scan synchronization
+
+    lda #$00  ; clear out the register
+    sta $2006
+    sta $2006
+
+    lda scrollx
+    sta $2005
+    lda scrolly
+    sta $2005
+
+    lda #%10001000
+    ora swap
+    ldx $2002 ; clear the register before resetting because we're in the vblank
+    sta $2000
+
+donewithppu:
+    lda #$01
+    sta $07FF
+    
+    pla  ; Pull A, P, X, Y
+    tay
+    pla
+    tax
+    plp
+    pla
+    inc drawcomplete
     rti
 
 PALETTE:
@@ -570,5 +595,5 @@ PALETTE:
     .word 0
 
 .segment "CHARS"
-    ;.incbin "shooter.chr"
+    .incbin "shooter.chr"
 
