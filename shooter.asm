@@ -54,6 +54,10 @@
 
 .segment "CODE"
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Random Number Generator
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 prng:  ; Random Number Generator
     ldx #8        ; iteration count ( generates 8 bits)
     lda seed+0
@@ -75,6 +79,10 @@ WAITFORVBLANK:
     bpl WAITFORVBLANK
     rts
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                                        RESET
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 RESET:
     sei
     cld
@@ -86,10 +94,12 @@ RESET:
     stx $2000
     stx $2001
     stx $4010
-
     JSR WAITFORVBLANK
-
     txa
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                                  CLEAR MEMORY
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 CLEARMEM:
     sta $0000, x
@@ -214,6 +224,10 @@ ATTLOAD:
     lda #$02
     sta spritemem+1
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                                        GAME LOOP
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 GAMELOOP:
 INITILIZESPRITES:
     ldy #$00
@@ -232,8 +246,11 @@ INITILIZESPRITESLOOP:
     beq startreadcontrollers
     jmp INITILIZESPRITESLOOP
 
-startreadcontrollers:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                     Read Controller Register
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+startreadcontrollers:
     ; read controls
     LDA #$01
     STA $4016
@@ -269,23 +286,33 @@ readcontrollerbuttons:
     ROR A
     ROL controller
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-checkleft:
-
-    lda controller
-    and #$02
-    beq checkright
-    dec entities+Entity::xpos
-    jmp checkup ; don't allow for left and right at the same time
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Check Right Directional
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 checkright:
-
     lda controller
     and #$01
-    beq checkup
+    beq checkleft
     inc entities+Entity::xpos
+    jmp checkup ; don't allow for left and right at the same time
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Check Left Directional
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+checkleft:
+    lda controller
+    and #$02
+    beq checkup
+    dec entities+Entity::xpos
+
     
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Check Up Directional
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 checkup:
 
     lda controller
@@ -293,6 +320,10 @@ checkup:
     beq checkdown
     dec entities+Entity::ypos
     jmp donecheckingdirectional ; don't allow up and down to be pressed at the same time
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Check Down Directional
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 checkdown:
 
@@ -302,9 +333,10 @@ checkdown:
     inc entities+Entity::ypos
 
 donecheckingdirectional:
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 checkbuttons:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Check "A" Button
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 checka:
     lda controller
@@ -313,18 +345,45 @@ checka:
     lda buttonflag
     ora #$01
     sta buttonflag
-    jmp finishcontrols
+    jmp checkb
 checkarerelease:
     lda buttonflag
     and #$01
-    beq finishcontrols
-    dec buttonflag ; for a this works because it's bit 1
+    beq checkb
+    lda buttonflag
+    eor #$01
+    sta buttonflag
     jmp addbullet
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Check "B" Button
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+checkb:
+    lda controller
+    and #$40
+    beq checkbrelease
+    lda buttonflag
+    ora #$02
+    sta buttonflag
+    jmp finishcontrols
+checkbrelease:
+    lda buttonflag
+    and #$02
+    beq finishcontrols
+    lda buttonflag
+    eor #$02
+    sta buttonflag
+    jmp addflyby
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Add Bullet
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 addbullet:
     ldx #$00
 addbulletloop:
-    cpx #TOTALENTITIES-.sizeof(Entity) ; stop here because we're interested in up to 1c, but we dont want to go past that
+    cpx #TOTALENTITIES
     beq finishcontrols                 ; if we've hit hte max, then there are no more available entities for this
     lda entities+Entity::type, x       ; get the entity type from memory
     cmp #EntityType::NoEntity          ; is this a used entity slot?
@@ -344,8 +403,39 @@ addbulletentity:
     lda #EntityType::Bullet
     sta entities+Entity::type, x
     jmp finishcontrols
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Add Fly By
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+addflyby:
+    ldx #$00
+addflybyloop:
+    cpx #TOTALENTITIES
+    beq finishcontrols
+    lda entities+Entity::type, x
+    cmp #EntityType::NoEntity
+    beq addflybyentity
+    txa
+    clc
+    adc #.sizeof(Entity)
+    tax
+    jmp addflybyloop
+addflybyentity:
+    lda entities+Entity::xpos
+    sta entities+Entity::xpos, x
+    lda #$08
+    sta entities+Entity::ypos, x
+    lda #EntityType::FlyBy
+    sta entities+Entity::type, x
+    jmp finishcontrols
+
 finishcontrols:
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Process Scrolling
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 processcrolling:
     lda scrolly
     sec
@@ -360,31 +450,54 @@ processcrolling:
     sta swap
 donescroll:
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Process Entities
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 processentities:
     ldx #.sizeof(Entity)
 processentitiesloop:
     lda entities+Entity::type,x
     cmp #EntityType::Bullet
-    bne skipentity
+    beq processbullet
+    cmp #EntityType::FlyBy
+    beq processflyby
+    jmp skipentity
+
 processbullet:
     lda entities+Entity::ypos, x
     sec
     sbc #$03
     sta entities+Entity::ypos, x
     bcs entitycomplete
+    jmp clearentity
+
+processflyby:
+    lda entities+Entity::ypos, x
+    clc
+    adc #$02
+    sta entities+Entity::ypos, X
+    cmp #$FE
+    bne entitycomplete
+    jmp clearentity
+    jmp entitycomplete
+
+clearentity:
     lda #EntityType::NoEntity
     sta entities+Entity::type, x
     lda #$FF
     sta entities+Entity::xpos, x
     sta entities+Entity::ypos, x
+    jmp entitycomplete
 entitycomplete:
 skipentity:
     txa
     clc
     adc #.sizeof(Entity)
     tax
-    cmp #$1E
+    cmp #TOTALENTITIES*.sizeof(Entity)
     bne processentitiesloop
+
 doneprocessentities:
 
 waitfordrawtocomplete:
@@ -395,6 +508,11 @@ waitfordrawtocomplete:
     sta drawcomplete
 
     jmp GAMELOOP
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Process Graphics (VBLANK)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 VBLANK: 
 ; todo: rework this so game engine code is in main execution and
@@ -407,7 +525,7 @@ VBLANK:
     pha
     tya
     pha
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 ; begin populating the OAM data in memory
     ldx #$00
@@ -417,15 +535,25 @@ VBLANK:
     lda #$02
     sta spritemem+1
    
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Draw Entities
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 DRAWENTITIES:
     lda entities+Entity::type, x
     cmp #EntityType::PlayerType
     beq PLAYERSPRITE
     cmp #EntityType::Bullet
-    beq BULLET
+    beq BULLETSPRITE
+    cmp #EntityType::FlyBy
+    beq FLYBYSPRITE
     jmp CHECKENDSPRITE
 
-BULLET:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             FlyBy Sprite
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+FLYBYSPRITE:
     lda entities+Entity::ypos, x ; y
     sta (spritemem), y
     iny
@@ -438,11 +566,31 @@ BULLET:
     lda entities+Entity::xpos, x ; x
     sta (spritemem), y
     iny
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
- 
     jmp CHECKENDSPRITE
 
-FLYBY:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Bullet Sprite
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+BULLETSPRITE:
+    lda entities+Entity::ypos, x ; y
+    sta (spritemem), y
+    iny
+    lda #$01  ; tile
+    sta (spritemem), y
+    iny
+    lda #$02 ; palette etx
+    sta (spritemem), y
+    iny
+    lda entities+Entity::xpos, x ; x
+    sta (spritemem), y
+    iny
+    jmp CHECKENDSPRITE
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Player Sprite
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 PLAYERSPRITE:
     ; top left sprite
     lda entities+Entity::ypos, x ; y
@@ -507,7 +655,12 @@ PLAYERSPRITE:
     adc #$08
     sta (spritemem), y
     iny
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                             Check End Sprites
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 CHECKENDSPRITE:
     txa
     clc
