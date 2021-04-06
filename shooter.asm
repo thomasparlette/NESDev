@@ -12,6 +12,7 @@
     .byte %00000000               ; Flags 9 NTSC
     .byte %00000000               ; Flags 10
     .byte $00, $00, $00, $00, $00 ; Flags 11-15: Unused padding
+
 .scope EntityType
     NoEntity = 0
     PlayerType = 1
@@ -23,6 +24,7 @@
     xpos .byte
     ypos .byte
     type .byte
+    data .byte 
 .endstruct
 
 
@@ -36,7 +38,7 @@
     scrollx:      .res 1
     scrolly:      .res 1
 
-    MAXENTITIES = 10
+    MAXENTITIES = 15
     entities:     .res .sizeof(Entity) * MAXENTITIES
     TOTALENTITIES = .sizeof(Entity) * MAXENTITIES
     
@@ -127,7 +129,7 @@ CLEARMEM:
     lda #EntityType::PlayerType
     sta entities+Entity::type
 
-    ldx #$03
+    ldx #.sizeof(Entity)
     lda #$FF
 CLEARENTITIES:
     sta entities+Entity::xpos, x
@@ -135,9 +137,11 @@ CLEARENTITIES:
     lda #$00
     sta entities+Entity::type, x
     lda #$FF
-    inx     ; faster to do 3 increments than an add because it's 2 less cycles
-    inx
-    inx
+    ; todo: possible optimizationj using inx vs long-hand
+    txa
+    clc
+    adc #.sizeof(Entity)
+    tax
     cpx #TOTALENTITIES
     bne CLEARENTITIES
 
@@ -158,6 +162,10 @@ CLEARENTITIES:
     lda #$02
     sta scrolly
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                                  Palette Loading
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
     ldx #$00
 PALETTELOAD:
@@ -167,7 +175,7 @@ PALETTELOAD:
     cpx #$20
     bne PALETTELOAD
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
     lda #$C0
     sta bgloadlo
@@ -416,6 +424,7 @@ addflybyloop:
     lda entities+Entity::type, x
     cmp #EntityType::NoEntity
     beq addflybyentity
+    ; todo: possible optimizationj using inx vs long-hand
     txa
     clc
     adc #.sizeof(Entity)
@@ -473,10 +482,15 @@ processbullet:
     jmp clearentity
 
 processflyby:
+    inc entities+Entity::data, x
+    lda entities+Entity::data, x
+    cmp #$03
+    bne processflybyskipinc
+    lda #$00
+    sta entities+Entity::data, x
+    inc entities+Entity::ypos, x
+processflybyskipinc:
     lda entities+Entity::ypos, x
-    clc
-    adc #$02
-    sta entities+Entity::ypos, X
     cmp #$FE
     bne entitycomplete
     jmp clearentity
@@ -557,10 +571,10 @@ FLYBYSPRITE:
     lda entities+Entity::ypos, x ; y
     sta (spritemem), y
     iny
-    lda #$01  ; tile
+    lda #$02  ; tile
     sta (spritemem), y
     iny
-    lda #$02 ; palette etx
+    lda #$01 ; palette etx
     sta (spritemem), y
     iny
     lda entities+Entity::xpos, x ; x
