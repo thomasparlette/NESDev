@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <body>
+            <canvas id="canvas" width=800 height=600/>
+            <script>
+                var keyup = false;
+                var keydown = false;
+                var keyleft = false;
+                var keyright = false;
+
+                var rect = JSON.parse('{"x": 0, "y": 0, "cx": 4, "cy": 4, "width": 8}');
+                var rect2 = JSON.parse('{"x": 20, "y": 20, "cx": 24, "cy": 24, "width": 8}');
+                var canvas = document.getElementById("canvas");
+                var context = canvas.getContext("2d");
+
+                document.body.onkeydown = checkkeydown;
+                document.body.onkeyup = checkkeyup;
+                setInterval(refresh, 100);
+
+                function refresh()
+                {
+                    if (keydown)
+                    {
+                        ++rect.y;
+                        ++rect.cy;
+                    }
+                    else if(keyup)
+                    {
+                        --rect.y;
+                        --rect.cy;
+                    }
+                    else if(keyleft)
+                    {
+                        --rect.x;
+                        --rect.cx;
+                    }
+                    else if(keyright)
+                    {
+                        ++rect.x;
+                        ++rect.cx;
+                    }
+                    context.fillSyle = "rgb(255,255,255)";
+                    context.fillRect(0,0,canvas.width,canvas.height);
+                    if ((Math.abs(rext.x-rect2.x)<<1<rect.width+rect2.width) && 
+                       (Math.abs(rect.y-rect2.y)<<1<rect.widht+rect2.width))
+                    {
+                        context.fillSyle = "rgb(255,0,0)";
+                    }
+                    else
+                    {
+                        context.fillSyle = "rgb(0,0,0)";
+                    }
+                    context.fillRect(rect.x, rect.y, rect.width, rect.width);
+                    context.fillRect(rect2.x, rect2.y, rect2.width, rect2.width);
+                }
+
+                function checkkeyup(e)
+                {
+                    if (e.key == "ArrowUp")
+                    {
+                        keyup = false;
+                    }
+                    else if (e.key == "ArrowDown")
+                    {
+                        keydown = false;
+                    }
+                    else if (e.key == "ArrowLeft")
+                    {
+                        keyleft = false;
+                    }
+                    else if (e.key == "ArrowRight")
+                    {
+                        keyfight = false;
+                    }
+                }
+
+                function checkkeydown(e)
+                {
+                    if (e.key == "ArrowUp")
+                    {
+                        keyup = true;
+                    }
+                    else if (e.key == "ArrowDown")
+                    {
+                        keydown = true;
+                    }
+                    else if (e.key == "ArrowLeft")
+                    {
+                        keyleft = true;
+                    }
+                    else if (e.key == "ArrowRight")
+                    {
+                        keyfight = true;
+                    }
+                }
+            </script>
+        </body>
+    </head>
+</html>
