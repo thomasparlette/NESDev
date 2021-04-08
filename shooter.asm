@@ -51,8 +51,11 @@
     bghi:         .res 1
     seed:         .res 2     ; initialize 16-bit seed to any value except 0
     flicker:      .res 1
-    collisiontmp:  .res 1     ; used in the collision routine to store the x or y value we're comparing against
-    
+    collisiontmp: .res 1     ; used in the collision routine to store the x or y value we're comparing against
+    boundingleft: .res 1
+    boundingtop:  .res 1
+    boundingright: .res 1
+    boundingbottom: .res 1
 
 .segment "CODE"
 
@@ -74,7 +77,6 @@ prng:  ; Random Number Generator
     sta seed+0
     cmp #0        ; reload flags
     rts
-
 
 WAITFORVBLANK:
     bit $2002
@@ -543,70 +545,65 @@ checkbulletcollisionloop:
     beq finishedbulletcollision
     lda entities+Entity::type, x
     cmp #EntityType::FlyBy
-    bne checkbulletentityfinished
-
-    lda entities+Entity::xpos, y ; get the bullet's current x position
-    clc
-    adc #$01                     ; get the bullet's collision x position xb, xb  +1
-    cmp entities+Entity::xpos, x ; compare the flyby x
-    bcc checkcollisionpoint2     ; xb >= xf
-    pha
-    lda entities+Entity::xpos, x ; xf
-    clc
-    adc #$08                     ; xf + 8
-    sta collisiontmp
-    pla                          ; get xb back into A
-    cmp collisiontmp             ; xb <= xf?
-    beq skipx                    ; are xf and xb equal? or xb > xf
-    bcs checkcollisionpoint2     
-skipx:
-    ; we know that we're in the x range
-    lda entities+Entity::ypos , y ; get the bullet's current position
-    clc
-    adc #$04
-    cmp entities+Entity::ypos, x  ; compare to flyby y
-    bcc checkcollisionpoint2
-    pha
-    lda entities+Entity::ypos, x
+    bne bulletcollisionskipentity
+    ;; this is a flyby
+    lda entities+Entity::xpos, x
+    sta boundingleft
     clc
     adc #$08
-    sta collisiontmp
-    pla
-    cmp collisiontmp
-    beq skipy
-    bcs checkcollisionpoint2
-skipy:
-    ;; we know the x position of collision point 1 is within the bounds of the flyby
-    lda entities+Entity::ypos, y ; get the bullet's current y position yb
+    sta boundingright
+    lda entities+Entity::ypos, x
+    sta boundingtop
     clc
-    adc #$04                    ; increment by 4
-    sta collisiontmp            ; store in collisiontmp
-    lda entities+Entity::ypos, x ; get the entity top-most position yf
-    sec
-    sbc collisiontmp           ; yf - yb
-    bpl checkcollisionpoint2   ; yf > yb?
-    lda entities+Entity::ypos, x  ; get the entity top-most position yf
-    clc
-    adc #$08                   ; yf += 8 (bottom-most)
-    sec
-    sbc collisiontmp           ; yf - yb
-    bmi checkcollisionpoint2   ; yb > yf
-    ;; we know the x and the y are both within the bounds of the flyby box
-    lda #EntityType::NoEntity
-    sta entities+Entity::type, y ; destory the bullet by changine it's type to NoEntity
-    sta entities+Entity::type, x ; destory the flyby by changine it's type to NoEntity
-    jmp finishedbulletcollision
-    
-checkcollisionpoint2:
-
-
-checkbulletentityfinished:
+    adc #$08
+    sta boundingbottom
     txa
+    pha
+    ldx #$00
+    lda BULLETCOLLISION, x
+    sta collisiontmp
+collisionpointloop:
+    cpx collisiontmp
+    beq checkbulletentityfinished
+    lda entities+Entity::xpos, y      ; get the bullet's current x position
+    clc
+    adc BULLETCOLLISIONX, x           ; get the bullet's collision x position xb
+    cmp boundingleft                 ; compare to flyby x
+    bcc checkcollisionpointfailed     ; xb >= xf
+    cmp boundingright                ; xb <= xf + 8?
+    beq skipx                         ; are xf and xb equal? or xb > xf
+    bcs checkcollisionpointfailed     
+skipx:
+    ; we know that we're in the x range
+    lda entities+Entity::ypos , y      ; get the bullet's current position
+    clc
+    adc BULLETCOLLISIONY, x           ; get the bullet's y collision position yb
+    cmp boundingtop                  ; compare to flyby y
+    bcc checkcollisionpointfailed
+    cmp boundingbottom               ; yb <= yf +8
+    beq skipy
+    bcs checkcollisionpointfailed
+skipy:
+    ;; we know the x and the y are both within the bounds of the flyby box
+    pla
+    tax                               ; get the entity index back from the stack
+    lda #EntityType::NoEntity
+    sta entities+Entity::type, y      ; destory the bullet by changine it's type to NoEntity
+    sta entities+Entity::type, x      ; destory the flyby by changine it's type to NoEntity
+    jmp finishedbulletcollision
+   
+checkcollisionpointfailed:
+    inx
+    jmp collisionpointloop
+checkbulletentityfinished:
+    pla
+    tax                               ; get the entity index back from the stack
+bulletcollisionskipentity:
+    txa                               ; setting A to the value of X becasue we may not always have justed pulled X off the stack
     clc
     adc #.sizeof(Entity)
     tax
     jmp checkbulletcollisionloop
-
 finishedbulletcollision:
     plp ; P, X, A
     pla
@@ -835,6 +832,7 @@ donewithppu:
     inc drawcomplete
     rti
 
+BULLETCOLLISION:
 BULLETCOLLISIONPOINTCOUNT:
     .byte $03
 BULLETCOLLISIONX:
