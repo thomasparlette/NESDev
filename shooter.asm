@@ -23,6 +23,7 @@
     xpos .byte
     ypos .byte
     type .byte
+    data .byte
 .endstruct
 
 
@@ -128,7 +129,7 @@ CLEARMEM:
     lda #EntityType::PlayerType
     sta entities+Entity::type
 
-    ldx #$03
+    ldx #.sizeof(Entity)
     lda #$FF
 CLEARENTITIES:
     sta entities+Entity::xpos, x
@@ -136,9 +137,11 @@ CLEARENTITIES:
     lda #$00
     sta entities+Entity::type, x
     lda #$FF
-    inx     ; faster to do 3 increments than an add because it's 2 less cycles
-    inx
-    inx
+    ; todo: possible optimization using inx vs long-hand
+    txa
+    clc
+    adc #.sizeof(Entity)
+    tax
     cpx #TOTALENTITIES
     bne CLEARENTITIES
 
@@ -466,9 +469,9 @@ processentitiesloop:
     jmp skipentity
 
 processbullet:
-    lda entities+Entity::ypos, x  ; get the y pos and subtract 3
+    lda entities+Entity::ypos, x  ; get the y pos and subtract 2
     sec
-    sbc #$03
+    sbc #$02
     ; check collision with other entities
     ; if colide, destroy entities possibly triggering explosion entity
     ; otherwise continue
@@ -478,14 +481,19 @@ processbullet:
     jmp clearentity
 
 processflyby:
+    inc entities+Entity::data, x
+    lda entities+Entity::data, x
+    cmp #$02
+    bne processflybyskipinc
+    lda #$00
+    sta entities+Entity::data, x
+    inc entities+Entity::ypos, x
+processflybyskipinc:
     lda entities+Entity::ypos, x
-    clc
-    adc #$02
-    sta entities+Entity::ypos, X
     cmp #$FE
     bne entitycomplete
     jmp clearentity
-    jmp entitycomplete
+
 
 clearentity:
     lda #EntityType::NoEntity
@@ -496,6 +504,7 @@ clearentity:
     jmp entitycomplete
 entitycomplete:
 skipentity:
+    ; todo: possible optimization using inx vs long-hand
     txa
     clc
     adc #.sizeof(Entity)
@@ -535,20 +544,38 @@ checkbulletcollisionloop:
     lda entities+Entity::type, x
     cmp #EntityType::FlyBy
     bne checkbulletentityfinished
+
     lda entities+Entity::xpos, y ; get the bullet's current x position
     clc
-    adc #$01                     ; get the bullet's collision x position xb
-    sta collisiontmp
-    lda entities+Entity::xpos, x ; get the leftr-most position and compare it with the current bullet poosition  xf
-    sec
-    sbc collisiontmp             ; xf - xb
-    bpl checkcollisionpoint2     ; xf > xb?
-    lda entities+Entity::xpos, x ; get the xf
+    adc #$01                     ; get the bullet's collision x position xb, xb  +1
+    cmp entities+Entity::xpos, x ; compare the flyby x
+    bcc checkcollisionpoint2     ; xb >= xf
+    pha
+    lda entities+Entity::xpos, x ; xf
     clc
-    adc #$08                     ; xf += 8
-    sec
-    sbc collisiontmp            ; xf - xb
-    bmi checkcollisionpoint2    ; xb > xf?
+    adc #$08                     ; xf + 8
+    sta collisiontmp
+    pla                          ; get xb back into A
+    cmp collisiontmp             ; xb <= xf?
+    beq skipx                    ; are xf and xb equal? or xb > xf
+    bcs checkcollisionpoint2     
+skipx:
+    ; we know that we're in the x range
+    lda entities+Entity::ypos , y ; get the bullet's current position
+    clc
+    adc #$04
+    cmp entities+Entity::ypos, x  ; compare to flyby y
+    bcc checkcollisionpoint2
+    pha
+    lda entities+Entity::ypos, x
+    clc
+    adc #$08
+    sta collisiontmp
+    pla
+    cmp collisiontmp
+    beq skipy
+    bcs checkcollisionpoint2
+skipy:
     ;; we know the x position of collision point 1 is within the bounds of the flyby
     lda entities+Entity::ypos, y ; get the bullet's current y position yb
     clc
@@ -569,7 +596,6 @@ checkbulletcollisionloop:
     sta entities+Entity::type, y ; destory the bullet by changine it's type to NoEntity
     sta entities+Entity::type, x ; destory the flyby by changine it's type to NoEntity
     jmp finishedbulletcollision
-        
     
 checkcollisionpoint2:
 
@@ -808,6 +834,13 @@ donewithppu:
     pla
     inc drawcomplete
     rti
+
+BULLETCOLLISIONPOINTCOUNT:
+    .byte $03
+BULLETCOLLISIONX:
+    .byte $01, $04, $07
+BULLETCOLLISIONY:
+    .byte $04, $01, $04
 
 PALETTE:
     .byte $0D, $30, $16, $27
