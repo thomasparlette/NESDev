@@ -31,12 +31,13 @@
 
 .segment "ZEROPAGE"
 ; 0x00 - 0xFF
+    spritemem:    .res 2
     drawcomplete: .res 1   ; Indicates that vblank has finished PPU processing when it's value is 1
     controller:   .res 1
     scrollx:      .res 1
     scrolly:      .res 1
 
-    MAXENTITIES = 10
+    MAXENTITIES = 14
     entities:     .res .sizeof(Entity) * MAXENTITIES
     TOTALENTITIES = .sizeof(Entity) * MAXENTITIES
     
@@ -49,8 +50,8 @@
     bghi:         .res 1
     seed:         .res 2     ; initialize 16-bit seed to any value except 0
     flicker:      .res 1
-    spritemem:    .res 2
-
+    collisiontmp:  .res 1     ; used in the collision routine to store the x or y value we're comparing against
+    
 
 .segment "CODE"
 
@@ -465,10 +466,14 @@ processentitiesloop:
     jmp skipentity
 
 processbullet:
-    lda entities+Entity::ypos, x
+    lda entities+Entity::ypos, x  ; get the y pos and subtract 3
     sec
     sbc #$03
-    sta entities+Entity::ypos, x
+    ; check collision with other entities
+    ; if colide, destroy entities possibly triggering explosion entity
+    ; otherwise continue
+    jsr checkbulletcondition
+    sta entities+Entity::ypos, x  ; store it and check if we carried on subtraction (todo: do we need to store this every time? - only affects bullet on last check)
     bcs entitycomplete
     jmp clearentity
 
@@ -495,7 +500,7 @@ skipentity:
     clc
     adc #.sizeof(Entity)
     tax
-    cmp #TOTALENTITIES*.sizeof(Entity)
+    cmp #TOTALENTITIES
     bne processentitiesloop
 
 doneprocessentities:
@@ -510,6 +515,78 @@ waitfordrawtocomplete:
     jmp GAMELOOP
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                                    Check Bullet Condidition
+;                                    in: X contains index of current entity
+;                                    out: none
+;                                    note: Modifies Y
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+checkbulletcondition:
+    pha  ; A, X, P
+    txa
+    pha
+    php
+    tay  ; this now contains the index of the entity from the preceding call
+    ldx #$00
+checkbulletcollisionloop:
+    cpx #TOTALENTITIES
+    beq finishedbulletcollision
+    lda entities+Entity::type, x
+    cmp #EntityType::FlyBy
+    bne checkbulletentityfinished
+    lda entities+Entity::xpos, y ; get the bullet's current x position
+    clc
+    adc #$01                     ; get the bullet's collision x position xb
+    sta collisiontmp
+    lda entities+Entity::xpos, x ; get the leftr-most position and compare it with the current bullet poosition  xf
+    sec
+    sbc collisiontmp             ; xf - xb
+    bpl checkcollisionpoint2     ; xf > xb?
+    lda entities+Entity::xpos, x ; get the xf
+    clc
+    adc #$08                     ; xf += 8
+    sec
+    sbc collisiontmp            ; xf - xb
+    bmi checkcollisionpoint2    ; xb > xf?
+    ;; we know the x position of collision point 1 is within the bounds of the flyby
+    lda entities+Entity::ypos, y ; get the bullet's current y position yb
+    clc
+    adc #$04                    ; increment by 4
+    sta collisiontmp            ; store in collisiontmp
+    lda entities+Entity::ypos, x ; get the entity top-most position yf
+    sec
+    sbc collisiontmp           ; yf - yb
+    bpl checkcollisionpoint2   ; yf > yb?
+    lda entities+Entity::ypos, x  ; get the entity top-most position yf
+    clc
+    adc #$08                   ; yf += 8 (bottom-most)
+    sec
+    sbc collisiontmp           ; yf - yb
+    bmi checkcollisionpoint2   ; yb > yf
+    ;; we know the x and the y are both within the bounds of the flyby box
+    lda #EntityType::NoEntity
+    sta entities+Entity::type, y ; destory the bullet by changine it's type to NoEntity
+    sta entities+Entity::type, x ; destory the flyby by changine it's type to NoEntity
+    jmp finishedbulletcollision
+        
+    
+checkcollisionpoint2:
+
+
+checkbulletentityfinished:
+    txa
+    clc
+    adc #.sizeof(Entity)
+    tax
+    jmp checkbulletcollisionloop
+
+finishedbulletcollision:
+    plp ; P, X, A
+    pla
+    tax
+    pla
+    rts
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;                                             Process Graphics (VBLANK)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -557,7 +634,7 @@ FLYBYSPRITE:
     lda entities+Entity::ypos, x ; y
     sta (spritemem), y
     iny
-    lda #$01  ; tile
+    lda #$02  ; tile
     sta (spritemem), y
     iny
     lda #$02 ; palette etx

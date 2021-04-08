@@ -16,6 +16,7 @@
 
                 document.body.onkeydown = checkkeydown;
                 document.body.onkeyup = checkkeyup;
+
                 setInterval(refresh, 100);
 
                 function refresh()
@@ -33,23 +34,24 @@
                     else if(keyleft)
                     {
                         --rect.x;
-                        --rect.cx;
+                        --rect.cy;
                     }
                     else if(keyright)
                     {
                         ++rect.x;
-                        ++rect.cx;
+                        ++rect.cy;
                     }
-                    context.fillSyle = "rgb(255,255,255)";
+
+                    context.fillStyle = "rgb(255,255,255)";
                     context.fillRect(0,0,canvas.width,canvas.height);
-                    if ((Math.abs(rext.x-rect2.x)<<1<rect.width+rect2.width) && 
-                       (Math.abs(rect.y-rect2.y)<<1<rect.widht+rect2.width))
+                    if ((Math.abs(rect.x-rect2.x)<<1<rect.width+rect2.width) && 
+                         (Math.abs(rect.y-rect2.y)<<1<rect.width+rect2.width))
                     {
-                        context.fillSyle = "rgb(255,0,0)";
+                        context.fillStyle = "rgb(0,255,0)";
                     }
                     else
                     {
-                        context.fillSyle = "rgb(0,0,0)";
+                        context.fillStyle = "rgb(255,0,0)";
                     }
                     context.fillRect(rect.x, rect.y, rect.width, rect.width);
                     context.fillRect(rect2.x, rect2.y, rect2.width, rect2.width);
@@ -71,7 +73,7 @@
                     }
                     else if (e.key == "ArrowRight")
                     {
-                        keyfight = false;
+                        keyright = false;
                     }
                 }
 
@@ -91,7 +93,7 @@
                     }
                     else if (e.key == "ArrowRight")
                     {
-                        keyfight = true;
+                        keyright = true;
                     }
                 }
             </script>
