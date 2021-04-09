@@ -14,7 +14,7 @@
     .byte $00, $00, $00, $00, $00 ; Flags 11-15: Unused padding
 .scope EntityType
     NoEntity = 0
-    PlayerType = 1
+    Player = 1
     Bullet = 2
     FlyBy = 3
 .endscope
@@ -22,6 +22,8 @@
 .struct Entity
     xpos .byte
     ypos .byte
+    xv   .byte
+    yv   .byte
     type .byte
     data .byte
 .endstruct
@@ -128,7 +130,7 @@ CLEARMEM:
     sta entities+Entity::xpos
     lda #$78
     sta entities+Entity::ypos
-    lda #EntityType::PlayerType
+    lda #EntityType::Player
     sta entities+Entity::type
 
     ldx #.sizeof(Entity)
@@ -300,7 +302,7 @@ checkright:
     lda controller
     and #$01
     beq checkleft
-    inc entities+Entity::xpos
+    inc entities+Entity::xv
     jmp checkup ; don't allow for left and right at the same time
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -312,7 +314,7 @@ checkleft:
     lda controller
     and #$02
     beq checkup
-    dec entities+Entity::xpos
+    dec entities+Entity::xv
 
     
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -324,7 +326,7 @@ checkup:
     lda controller
     and #$08
     beq checkdown
-    dec entities+Entity::ypos
+    dec entities+Entity::yv
     jmp donecheckingdirectional ; don't allow up and down to be pressed at the same time
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -336,7 +338,7 @@ checkdown:
     lda controller
     and #$04
     beq donecheckingdirectional
-    inc entities+Entity::ypos
+    inc entities+Entity::yv
 
 donecheckingdirectional:
 checkbuttons:
@@ -461,14 +463,46 @@ donescroll:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 processentities:
-    ldx #.sizeof(Entity)
+    ldx #$00
 processentitiesloop:
     lda entities+Entity::type,x
+    cmp #EntityType::Player
+    beq processplayer
     cmp #EntityType::Bullet
     beq processbullet
     cmp #EntityType::FlyBy
     beq processflyby
     jmp skipentity
+
+processplayer:
+    lda entities+Entity::xv, x
+    clc
+    ror
+    clc
+    ror                           ; xv /= 4 (xv >> 2)
+    clc
+    adc entities+Entity::xpos, x
+    sta entities+Entity::xpos, x
+    lda entities+Entity::xv, x
+    beq processplayerxvdone
+    bpl processplayerremovexv
+    inc entities+Entity::xv, x
+    jmp processplayerxvdone
+processplayerremovexv:
+    dec entities+Entity::xv, x
+    jmp processplayerxvdone
+processplayerxvdone:
+    lda entities+Entity::yv, x
+    clc
+    ror
+    clc
+    ror                           ; yv /= 4 (yv >> 2)
+    clc
+    adc entities+Entity::ypos, x
+    sta entities+Entity::ypos, x
+    dec entities+Entity::yv, x
+    dec entities+Entity::xv, x
+    jmp entitycomplete
 
 processbullet:
     lda entities+Entity::ypos, x  ; get the y pos and subtract 2
@@ -641,7 +675,7 @@ VBLANK:
 
 DRAWENTITIES:
     lda entities+Entity::type, x
-    cmp #EntityType::PlayerType
+    cmp #EntityType::Player
     beq PLAYERSPRITE
     cmp #EntityType::Bullet
     beq BULLETSPRITE

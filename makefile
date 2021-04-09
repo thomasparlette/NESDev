@@ -15,4 +15,4 @@ run: shooter.nes
 .PHONY: clean
 
 clean:
-	rm -f $(objects) output/shooter.nes 
+	rm -f $(objects) shooter.nes shooter.nes.deb
