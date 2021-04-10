@@ -303,6 +303,7 @@ checkright:
     and #$01
     beq checkleft
     inc entities+Entity::xv
+    inc entities+Entity::xv
     jmp checkup ; don't allow for left and right at the same time
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -314,6 +315,7 @@ checkleft:
     lda controller
     and #$02
     beq checkup
+    dec entities+Entity::xv
     dec entities+Entity::xv
 
     
@@ -327,6 +329,7 @@ checkup:
     and #$08
     beq checkdown
     dec entities+Entity::yv
+    dec entities+Entity::yv
     jmp donecheckingdirectional ; don't allow up and down to be pressed at the same time
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -338,6 +341,7 @@ checkdown:
     lda controller
     and #$04
     beq donecheckingdirectional
+    inc entities+Entity::yv
     inc entities+Entity::yv
 
 donecheckingdirectional:
@@ -477,10 +481,6 @@ processentitiesloop:
 processplayer:
     lda entities+Entity::xv, x
     clc
-    ror
-    clc
-    ror                           ; xv /= 4 (xv >> 2)
-    clc
     adc entities+Entity::xpos, x
     sta entities+Entity::xpos, x
     lda entities+Entity::xv, x
@@ -490,20 +490,20 @@ processplayer:
     jmp processplayerxvdone
 processplayerremovexv:
     dec entities+Entity::xv, x
-    jmp processplayerxvdone
 processplayerxvdone:
     lda entities+Entity::yv, x
     clc
-    ror
-    clc
-    ror                           ; yv /= 4 (yv >> 2)
-    clc
     adc entities+Entity::ypos, x
     sta entities+Entity::ypos, x
+    lda entities+Entity::yv, x
+    beq processplayervdone
+    bpl processplayerremoveyv
+    inc entities+Entity::yv, x
+    jmp processplayervdone
+processplayerremoveyv:
     dec entities+Entity::yv, x
-    dec entities+Entity::xv, x
+processplayervdone:
     jmp entitycomplete
-
 processbullet:
     lda entities+Entity::ypos, x  ; get the y pos and subtract 2
     sec
