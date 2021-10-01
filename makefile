@@ -1,18 +1,18 @@
 COMPILE=ca65
 LINK=ld65
 
-objects = shooter.o
+objects = ./bin/shooter.o
 
-/src/%.o: /src/%.asm
+./bin/%.o: ./src/%.asm
 	$(COMPILE) -v -t nes -o $@ $<
 
-shooter.nes: ./src/$(objects)
-	$(LINK) -v -t nes -o $@ $<
+shooter.nes: $(objects)
+	$(LINK) -v -t nes -o ./bin/$@ $<
 
 run: shooter.nes
-	../fceux64/fceux64.exe $<
+	./Tools/fceux/fceux.exe ./bin/$<
 
 .PHONY: clean
 
 clean:
-	rm -f $(objects) shooter.nes shooter.nes.deb
+	rm -f $(objects) ./bin/shooter.nes ./bin/shooter.nes.deb
