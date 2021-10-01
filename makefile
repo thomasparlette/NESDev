@@ -1,5 +1,5 @@
-COMPILE=ca65
-LINK=ld65
+COMPILE=./Tools/cc65/bin/ca65
+LINK=./Tools/cc65/bin/ld65
 
 objects = ./bin/shooter.o
 
