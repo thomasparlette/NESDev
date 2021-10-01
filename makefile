@@ -3,11 +3,11 @@ LINK=ld65
 
 objects = shooter.o
 
-%.o: %.asm
-	$(COMPILE) -t nes -o $@ $<
+/src/%.o: /src/%.asm
+	$(COMPILE) -v -t nes -o $@ $<
 
-shooter.nes: $(objects)
-	$(LINK) -t nes -o $@ $<
+shooter.nes: ./src/$(objects)
+	$(LINK) -v -t nes -o $@ $<
 
 run: shooter.nes
 	../fceux64/fceux64.exe $<
