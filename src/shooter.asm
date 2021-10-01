@@ -250,6 +250,8 @@ GAMELOOP:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 startreadcontrollers:
+    lda #$00
+    sta controller
     ; read controls
     LDA #$01
     STA $4016
@@ -309,10 +311,12 @@ LOAD_TITLE_SCREEN_STATE:
 TITLE_SCREEN_STATE:
     lda controller
     and #$10
-    beq GAMELOOP
+    bne TS_SKIP_WAIT
+    jmp waitfordrawtocomplete
+TS_SKIP_WAIT:
     lda #GameState::LoadNewGame
     sta gamestate
-    jmp GAMELOOP
+    jmp waitfordrawtocomplete
     
 PAUSE_STATE:
     lda controller
@@ -320,7 +324,7 @@ PAUSE_STATE:
     beq GAMELOOP
     lda #GameState::PlayingGame
     sta gamestate
-    jmp GAMELOOP
+    jmp waitfordrawtocomplete
 
 LOAD_NEW_GAME_STATE:
     ; reset assets for a new game
