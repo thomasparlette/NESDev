@@ -19,6 +19,14 @@
     FlyBy = 3
 .endscope
 
+.scope GameState
+    LoadTitleScreen = 0
+    TitleScreen     = 1
+    LoadNewGame     = 2
+    PlayingGame     = 3
+    Paused          = 4
+.endscope
+
 .struct Entity
     xpos .byte
     ypos .byte
@@ -34,16 +42,16 @@
 
 .segment "ZEROPAGE"
 ; 0x00 - 0xFF
+    gamestate: .res 1
+    controller:   .res 1
     spritemem:    .res 2
     drawcomplete: .res 1   ; Indicates that vblank has finished PPU processing when it's value is 1
-    controller:   .res 1
     scrollx:      .res 1
     scrolly:      .res 1
-
     MAXENTITIES = 14
+    MAXVELOCITY = 20
     entities:     .res .sizeof(Entity) * MAXENTITIES
-    TOTALENTITIES = .sizeof(Entity) * MAXENTITIES
-    
+    TOTALENTITIES = .sizeof(Entity) * MAXENTITIES  
     buttonflag:   .res 1
     swap:         .res 1
     hswaph:       .res 1
@@ -226,7 +234,7 @@ ATTLOAD:
     sta $2000
     lda #%00011110
     sta $2001
-    
+
     lda #$80
     sta spritemem
     lda #$02
@@ -237,23 +245,6 @@ ATTLOAD:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 GAMELOOP:
-INITILIZESPRITES:
-    ldy #$00
-    lda #$FF
-INITILIZESPRITESLOOP:
-    sta (spritemem), y
-    iny
-    eor #$FF
-    sta (spritemem), y
-    iny
-    sta (spritemem), y
-    iny
-    eor #$FF
-    sta (spritemem), y
-    iny
-    beq startreadcontrollers
-    jmp INITILIZESPRITESLOOP
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;                                     Read Controller Register
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -265,7 +256,7 @@ startreadcontrollers:
     LDA #$00
     STA $4016
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 readcontrollerbuttons:
 
@@ -294,6 +285,70 @@ readcontrollerbuttons:
     ROR A
     ROL controller
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    lda gamestate
+    cmp #GameState::LoadTitleScreen
+    beq LOAD_TITLE_SCREEN_STATE
+    cmp #GameState::TitleScreen
+    beq TITLE_SCREEN_STATE
+    cmp #GameState::LoadNewGame
+    beq LOAD_NEW_GAME_STATE
+    cmp #GameState::PlayingGame
+    beq GAME_PLAY_STATE
+    cmp #GameState::Paused
+    beq PAUSE_STATE
+PROBLEM:
+    jmp PROBLEM
+
+LOAD_TITLE_SCREEN_STATE:
+    ; load title screen assets into name table
+    lda #GameState::TitleScreen
+    sta gamestate
+    jmp GAMELOOP
+
+TITLE_SCREEN_STATE:
+    lda controller
+    and #$10
+    beq GAMELOOP
+    lda #GameState::LoadNewGame
+    sta gamestate
+    jmp GAMELOOP
+    
+PAUSE_STATE:
+    lda controller
+    and #$10
+    beq GAMELOOP
+    lda #GameState::PlayingGame
+    sta gamestate
+    jmp GAMELOOP
+
+LOAD_NEW_GAME_STATE:
+    ; reset assets for a new game
+    ; initialize any memory for the player or entities
+    ; load title maps?
+    lda #GameState::PlayingGame
+    sta gamestate
+    jmp GAMELOOP
+
+GAME_PLAY_STATE:
+INITILIZESPRITES:
+    ldy #$00
+    lda #$FF
+INITILIZESPRITESLOOP:
+    sta (spritemem), y
+    iny
+    eor #$FF
+    sta (spritemem), y
+    iny
+    sta (spritemem), y
+    iny
+    eor #$FF
+    sta (spritemem), y
+    iny
+    beq spriteinitfinished
+    jmp INITILIZESPRITESLOOP
+
+spriteinitfinished:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;                                             Check Right Directional
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -480,27 +535,59 @@ processentitiesloop:
 
 processplayer:
     lda entities+Entity::xv, x
+    beq processplayerxvdone    ; if the x velocity is 0 then we're done
+    bpl processplayerremovexv  ; if it's positive, then decrement the velocity
+    sec                        ; now xv >> 2 (negative case, set carry)
+    ror                        ; divide by 2
+    sec
+    ror                        ; divide by 2
     clc
     adc entities+Entity::xpos, x
     sta entities+Entity::xpos, x
-    lda entities+Entity::xv, x
-    beq processplayerxvdone
-    bpl processplayerremovexv
-    inc entities+Entity::xv, x
+    inc entities+Entity::xv, x ; increment the velocity
     jmp processplayerxvdone
 processplayerremovexv:
+    cmp #MAXVELOCITY                  ; check if x velocity (positive) > 20, clamp it to 20
+    beq skipforcedxvelocity
+    bcc skipforcedxvelocity
+    lda #MAXVELOCITY
+    sta entities+Entity::xv, x
+skipforcedxvelocity:
+    clc                       ; now xv >> 2 (positive case)
+    ror
+    clc
+    ror
+    clc
+    adc entities+Entity::xpos, x
+    sta entities+Entity::xpos, x
     dec entities+Entity::xv, x
 processplayerxvdone:
     lda entities+Entity::yv, x
+    beq processplayervdone    ; if the y velocity is 0 then we're done
+    bpl processplayerremoveyv ; 
+    sec                       ; now xy >> 2 (negative case, set carry)
+    ror
+    sec
+    ror
     clc
     adc entities+Entity::ypos, x
     sta entities+Entity::ypos, x
-    lda entities+Entity::yv, x
-    beq processplayervdone
-    bpl processplayerremoveyv
     inc entities+Entity::yv, x
     jmp processplayervdone
 processplayerremoveyv:
+    cmp #MAXVELOCITY                   ; check if y velocity (positive) > 20, clamp it to 20
+    beq skipforcedyvelocity
+    bcc skipforcedyvelocity
+    lda #MAXVELOCITY
+    sta entities+Entity::yv, x
+skipforcedyvelocity:
+    clc                       ; now xy >> 2 (positive case, clear carry)
+    ror
+    clc
+    ror
+    clc
+    adc entities+Entity::ypos, x
+    sta entities+Entity::ypos, x
     dec entities+Entity::yv, x
 processplayervdone:
     jmp entitycomplete
@@ -546,8 +633,8 @@ skipentity:
     adc #.sizeof(Entity)
     tax
     cmp #TOTALENTITIES
-    bne processentitiesloop
-
+    beq doneprocessentities
+    jmp processentitiesloop
 doneprocessentities:
 
 waitfordrawtocomplete:
