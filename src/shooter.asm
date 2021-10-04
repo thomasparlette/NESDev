@@ -42,7 +42,7 @@
 
 .segment "ZEROPAGE"
 ; 0x00 - 0xFF
-    gamestate: .res 1
+    gamestate:    .res 1
     controller:   .res 1
     spritemem:    .res 2
     drawcomplete: .res 1   ; Indicates that vblank has finished PPU processing when it's value is 1
@@ -322,7 +322,9 @@ TS_SKIP_WAIT:
 PAUSE_STATE:
     lda controller
     and #$10
-    beq GAMELOOP
+    beq PAUSE_SKIP_WAIT
+    jmp waitfordrawtocomplete
+PAUSE_SKIP_WAIT:
     lda #GameState::PlayingGame
     sta gamestate
     jmp waitfordrawtocomplete
@@ -336,6 +338,13 @@ LOAD_NEW_GAME_STATE:
     jmp GAMELOOP
 
 GAME_PLAY_STATE:
+    lda controller
+    and #$10
+    beq SKIPPAUSE
+    lda #GameState::Paused
+    sta gamestate
+    jmp waitfordrawtocomplete
+SKIPPAUSE:
 INITILIZESPRITES:
     ldy #$00
     lda #$FF
