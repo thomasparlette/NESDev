@@ -135,14 +135,14 @@ CLEARMEM:
     lda #$21
     sta hswaph
 ; initialize entities+Entity::xpos
-    lda #$80
-    sta entities+Entity::xpos
-    lda #$78
-    sta entities+Entity::ypos
-    lda #EntityType::Player
-    sta entities+Entity::type
+    ;lda #$80
+    ;sta entities+Entity::xpos
+    ;lda #$78
+    ;sta entities+Entity::ypos
+    ;lda #EntityType::Player
+    ;sta entities+Entity::type
 
-    ldx #.sizeof(Entity)
+    ldx #$00
     lda #$FF
 CLEARENTITIES:
     sta entities+Entity::xpos, x
@@ -158,13 +158,6 @@ CLEARENTITIES:
     cpx #TOTALENTITIES
     bne CLEARENTITIES
 
-; clear register and set
-; palette address
-    lda $2002
-    lda #$3F
-    sta $2006
-    lda #$10
-    sta $2006
 
 ; initialize background hi an low
 
@@ -175,59 +168,7 @@ CLEARENTITIES:
     lda #$02
     sta scrolly
 
-
-    ldx #$00
-PALETTELOAD:
-    lda PALETTE, x
-    sta $2007
-    inx
-    cpx #$20
-    bne PALETTELOAD
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-    lda #$C0
-    sta bgloadlo
-    lda #$03
-    sta bgloadhi
-    ldy #$00
-
-    lda $2002
-    lda #$20
-    sta $2006
-    lda #$00
-    sta $2006
-BGLOAD:
-    jsr prng
-    lsr
-    sta $2007
-    iny
-    cpy #$00
-    bne SKIPBGINC
-    inc bghi
-SKIPBGINC:
-    dec bgloadlo
-    lda bgloadlo
-    cmp #$FF
-    bne BGLOAD
-    dec bgloadhi
-    lda bgloadhi
-    cmp #$FF
-    bne BGLOAD
-
-; configure for loading the attributes
-    lda $2002
-    lda #$23
-    sta $2006
-    lda #$C0
-    sta $2006
-    ldx #$00
-    txa
-ATTLOAD:
-    sta $2007
-    inx
-    cpx #$08
-    bne ATTLOAD
 
     jsr WAITFORVBLANK
 
@@ -304,6 +245,22 @@ PROBLEM:
     jmp PROBLEM
 
 LOAD_TITLE_SCREEN_STATE:
+    ; clear register and set
+    ; palette address
+    lda $2002
+    lda #$3F
+    sta $2006
+    lda #$10
+    sta $2006
+
+    ldx #$00
+PALETTELOAD:
+    lda PALETTE, x
+    sta $2007
+    inx
+    cpx #$20
+    bne PALETTELOAD
+    
     ; load title screen assets into name table
     lda #GameState::TitleScreen
     sta gamestate
