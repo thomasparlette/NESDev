@@ -27,6 +27,11 @@
     Paused          = 4
 .endscope
 
+.scope TitleLoadState
+    RLE            = 0
+    NoCompression  = 1
+.endscope
+
 .struct Entity
     xpos .byte
     ypos .byte
@@ -56,10 +61,7 @@
     buttonflag:   .res 1
     swap:         .res 1
     hswaph:       .res 1
-    bgloadlo:     .res 1
-    bgloadhi:     .res 1
-    bglow:        .res 1
-    bghi:         .res 1
+    temp:         .res 1
     seed:         .res 2     ; initialize 16-bit seed to any value except 0
     flicker:      .res 1
     collisiontmp: .res 1     ; used in the collision routine to store the x or y value we're comparing against
@@ -134,13 +136,6 @@ CLEARMEM:
 
     lda #$21
     sta hswaph
-; initialize entities+Entity::xpos
-    ;lda #$80
-    ;sta entities+Entity::xpos
-    ;lda #$78
-    ;sta entities+Entity::ypos
-    ;lda #EntityType::Player
-    ;sta entities+Entity::type
 
     ldx #$00
     lda #$FF
@@ -169,13 +164,9 @@ CLEARENTITIES:
     sta scrolly
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    
 
     jsr WAITFORVBLANK
-
-    lda #%10000000
-    sta $2000
-    lda #%00011110
-    sta $2001
 
     lda #$80
     sta spritemem
@@ -234,15 +225,27 @@ readcontrollerbuttons:
     cmp #GameState::LoadTitleScreen
     beq LOAD_TITLE_SCREEN_STATE
     cmp #GameState::TitleScreen
-    beq TITLE_SCREEN_STATE
+    beq LOCAL_TITLE_SCREEN_STATE
     cmp #GameState::LoadNewGame
-    beq LOAD_NEW_GAME_STATE
+    beq LOCAL_LOAD_NEW_GAME_STATE
     cmp #GameState::PlayingGame
-    beq GAME_PLAY_STATE
+    beq LOCAL_GAME_PLAY_STATE
     cmp #GameState::Paused
-    beq PAUSE_STATE
+    beq LOCAL_PAUSE_STATE
 PROBLEM:
     jmp PROBLEM
+
+LOCAL_LOAD_NEW_GAME_STATE:
+    jmp LOAD_NEW_GAME_STATE
+
+LOCAL_TITLE_SCREEN_STATE:
+    jmp TITLE_SCREEN_STATE
+
+LOCAL_GAME_PLAY_STATE:
+    jmp GAME_PLAY_STATE
+
+LOCAL_PAUSE_STATE:
+    jmp PAUSE_STATE
 
 LOAD_TITLE_SCREEN_STATE:
     ; clear register and set
@@ -261,10 +264,61 @@ PALETTELOAD:
     cpx #$20
     bne PALETTELOAD
     
+    lda $2002
+    lda #$20
+    sta $2006
+    lda #$00
+    sta $2006
+
+
+    ldx #$00
+    lda TitleLoadState::RLE
+    sta temp
+
+LoadBackground:
+    lda TITLESCREEN, x
+    cmp #$FF
+    bne ProcessData
+    inx
+    lda TITLESCREEN, x
+    cmp #$FF
+    beq DONELOADING
+    lda temp          ; single 0xFF implies switch encoding
+    eor #$01
+    sta temp
+    jmp LoadBackground
+ProcessData:
+    lda temp
+    cmp #TitleLoadState::RLE
+    beq LoadRunLength
+SingleByte:
+    lda TITLESCREEN, x
+    sta $2007    
+    inx
+    jmp LoadBackground
+LoadRunLength:
+    ldy TITLESCREEN, x
+    inx
+    lda TITLESCREEN, x
+LoadRunLengthLoop:
+    sta $2007
+    dey
+    cpy #$00
+    bne LoadRunLengthLoop
+    inx
+    jmp LoadBackground
+DONELOADING:
     ; load title screen assets into name table
     lda #GameState::TitleScreen
     sta gamestate
+
+    lda #%10000000
+    sta $2000
+    lda #%00011110
+    sta $2001
+
     jmp GAMELOOP
+  
 
 TITLE_SCREEN_STATE:
     lda controller
@@ -290,8 +344,30 @@ LOAD_NEW_GAME_STATE:
     ; reset assets for a new game
     ; initialize any memory for the player or entities
     ; load title maps?
+    lda #%00000000
+    sta $2000
+    lda #%00000000
+    sta $2001
+    jsr WAITFORVBLANK
+    
+    ; initialize entities+Entity::xpos
+    lda #$80
+    sta entities+Entity::xpos
+    lda #$78
+    sta entities+Entity::ypos
+    lda #$00
+    sta entities+Entity::xv
+    sta entities+Entity::yv
+    lda #EntityType::Player
+    sta entities+Entity::type
     lda #GameState::PlayingGame
     sta gamestate
+    
+    lda #%10000000
+    sta $2000
+    lda #%00011110
+    sta $2001
+
     jmp GAMELOOP
 
 GAME_PLAY_STATE:
@@ -970,6 +1046,12 @@ PALETTE:
     .byte $0D, $00, $10, $12
     .byte $0D, $00, $10, $12
     .byte $0D, $00, $10, $12
+
+TITLESCREEN:
+    .byte $FE, $00, $A7, 00, $FF, $01, $02, $03, $04, $05, $06, $07, $08, $09, $0A, $0B, $0C, $00, $30, $31, $32, $33, $34, $35, $36, $37, $38, $FF, $0A, 00, $FF
+    .byte $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $1A, $1B, $1C, $40, $41, $42, $43, $44, $45, $46, $47, $48, $FF, $0A, 00, $FF
+    .byte $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $2A, $2B, $2C, $50, $51, $52, $53, $54, $55, $56, $57, $58 
+    .byte $FF, $FF
 
 .segment "VECTORS"
     .word VBLANK
