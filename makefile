@@ -16,3 +16,4 @@ run: shooter.nes
 
 clean:
 	rm -f $(objects) ./bin/shooter.nes ./bin/shooter.nes.deb
+
