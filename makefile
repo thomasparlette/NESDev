@@ -4,10 +4,10 @@ LINK=./Tools/cc65/bin/ld65
 objects = ./bin/shooter.o
 
 ./bin/%.o: ./src/%.asm
-	$(COMPILE)  -t nes -o $@ $<
+	$(COMPILE) -v -t nes -o $@ $<
 
 shooter.nes: $(objects)
-	$(LINK)  -t nes -o ./bin/$@ $<
+	$(LINK) -v -t nes -o ./bin/$@ $<
 
 run: shooter.nes
 	./Tools/fceux/fceux.exe ./bin/$<

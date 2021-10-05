@@ -49,7 +49,8 @@
     scrollx:      .res 1
     scrolly:      .res 1
     MAXENTITIES = 14
-    MAXVELOCITY = 20
+    MAXVELOCITY = 12
+    MAXNVELOCITY = $F4 
     entities:     .res .sizeof(Entity) * MAXENTITIES
     TOTALENTITIES = .sizeof(Entity) * MAXENTITIES  
     buttonflag:   .res 1
@@ -134,14 +135,14 @@ CLEARMEM:
     lda #$21
     sta hswaph
 ; initialize entities+Entity::xpos
-    lda #$80
-    sta entities+Entity::xpos
-    lda #$78
-    sta entities+Entity::ypos
-    lda #EntityType::Player
-    sta entities+Entity::type
+    ;lda #$80
+    ;sta entities+Entity::xpos
+    ;lda #$78
+    ;sta entities+Entity::ypos
+    ;lda #EntityType::Player
+    ;sta entities+Entity::type
 
-    ldx #.sizeof(Entity)
+    ldx #$00
     lda #$FF
 CLEARENTITIES:
     sta entities+Entity::xpos, x
@@ -157,13 +158,6 @@ CLEARENTITIES:
     cpx #TOTALENTITIES
     bne CLEARENTITIES
 
-; clear register and set
-; palette address
-    lda $2002
-    lda #$3F
-    sta $2006
-    lda #$10
-    sta $2006
 
 ; initialize background hi an low
 
@@ -174,59 +168,7 @@ CLEARENTITIES:
     lda #$02
     sta scrolly
 
-
-    ldx #$00
-PALETTELOAD:
-    lda PALETTE, x
-    sta $2007
-    inx
-    cpx #$20
-    bne PALETTELOAD
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-    lda #$C0
-    sta bgloadlo
-    lda #$03
-    sta bgloadhi
-    ldy #$00
-
-    lda $2002
-    lda #$20
-    sta $2006
-    lda #$00
-    sta $2006
-BGLOAD:
-    jsr prng
-    lsr
-    sta $2007
-    iny
-    cpy #$00
-    bne SKIPBGINC
-    inc bghi
-SKIPBGINC:
-    dec bgloadlo
-    lda bgloadlo
-    cmp #$FF
-    bne BGLOAD
-    dec bgloadhi
-    lda bgloadhi
-    cmp #$FF
-    bne BGLOAD
-
-; configure for loading the attributes
-    lda $2002
-    lda #$23
-    sta $2006
-    lda #$C0
-    sta $2006
-    ldx #$00
-    txa
-ATTLOAD:
-    sta $2007
-    inx
-    cpx #$08
-    bne ATTLOAD
 
     jsr WAITFORVBLANK
 
@@ -303,6 +245,22 @@ PROBLEM:
     jmp PROBLEM
 
 LOAD_TITLE_SCREEN_STATE:
+    ; clear register and set
+    ; palette address
+    lda $2002
+    lda #$3F
+    sta $2006
+    lda #$10
+    sta $2006
+
+    ldx #$00
+PALETTELOAD:
+    lda PALETTE, x
+    sta $2007
+    inx
+    cpx #$20
+    bne PALETTELOAD
+    
     ; load title screen assets into name table
     lda #GameState::TitleScreen
     sta gamestate
@@ -541,32 +499,49 @@ processentitiesloop:
     cmp #EntityType::Player
     beq processplayer
     cmp #EntityType::Bullet
-    beq processbullet
+    beq doneprocessbullet
     cmp #EntityType::FlyBy
-    beq processflyby
+    beq doneprocessflyby
     jmp skipentity
+doneprocessbullet:
+    jmp processbullet
+doneprocessflyby:
+    jmp processflyby
+
 
 processplayer:
     lda entities+Entity::xv, x
-    beq processplayerxvdone    ; if the x velocity is 0 then we're done
-    bpl processplayerremovexv  ; if it's positive, then decrement the velocity
-    sec                        ; now xv >> 2 (negative case, set carry)
-    ror                        ; divide by 2
+    beq processplayerxvdone       ; if the x velocity is 0 then we're done
+    bpl processplayerremovexv     ; if it's positive, then decrement the velocity
     sec
-    ror                        ; divide by 2
+    sbc #MAXNVELOCITY
+    bvc skipnxeor
+    eor #$80
+skipnxeor:
+    bpl reloadnxvelocity
+    lda #MAXNVELOCITY
+    sta entities+Entity::xv, x
+    jmp skipxnvelocitycap
+reloadnxvelocity:
+    lda entities+Entity::xv, x
+skipxnvelocitycap:
+    sec                           ; now xv >> 2 (negative case, set carry)
+    ror                           ; divide by 2
+    sec
+    ror                           ; divide by 2
     clc
     adc entities+Entity::xpos, x
     sta entities+Entity::xpos, x
-    inc entities+Entity::xv, x ; increment the velocity
+    inc entities+Entity::xv, x    ; increment the velocity
     jmp processplayerxvdone
 processplayerremovexv:
-    cmp #MAXVELOCITY                  ; check if x velocity (positive) > 20, clamp it to 20
+    cmp #MAXVELOCITY              ; check if x velocity (positive) > 20, clamp it to 20
     beq skipforcedxvelocity
     bcc skipforcedxvelocity
     lda #MAXVELOCITY
     sta entities+Entity::xv, x
 skipforcedxvelocity:
-    clc                       ; now xv >> 2 (positive case)
+    clc                            ; now xv >> 2 (positive case)
     ror
     clc
     ror
@@ -576,9 +551,21 @@ skipforcedxvelocity:
     dec entities+Entity::xv, x
 processplayerxvdone:
     lda entities+Entity::yv, x
-    beq processplayervdone    ; if the y velocity is 0 then we're done
-    bpl processplayerremoveyv ; 
-    sec                       ; now xy >> 2 (negative case, set carry)
+    beq processplayervdone       ; if the y velocity is 0 then we're done
+    bpl processplayerremoveyv  
+    sec
+    sbc #MAXNVELOCITY
+    bvc skipnyeor
+    eor #$80
+skipnyeor:
+    bpl reloadnyvelocity
+    lda #MAXNVELOCITY
+    sta entities+Entity::yv, x
+    jmp skipynvelocitycap
+reloadnyvelocity:
+    lda entities+Entity::yv, x
+skipynvelocitycap:
+    sec                          ; now xy >> 2 (negative case, set carry)
     ror
     sec
     ror
@@ -588,13 +575,13 @@ processplayerxvdone:
     inc entities+Entity::yv, x
     jmp processplayervdone
 processplayerremoveyv:
-    cmp #MAXVELOCITY                   ; check if y velocity (positive) > 20, clamp it to 20
+    cmp #MAXVELOCITY             ; check if y velocity (positive) > 20, clamp it to 20
     beq skipforcedyvelocity
     bcc skipforcedyvelocity
     lda #MAXVELOCITY
     sta entities+Entity::yv, x
 skipforcedyvelocity:
-    clc                       ; now xy >> 2 (positive case, clear carry)
+    clc                          ; now xy >> 2 (positive case, clear carry)
     ror
     clc
     ror
